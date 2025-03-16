@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>PiSpace Shooter</title>
 
-  <!-- Use your local Pi logo file. Make sure the path to pi-logo.png is correct. -->
+  <!-- Use your local Pi logo file. Ensure that pi-logo.png exists in ./images/ -->
   <link rel="icon" href="./images/pi-logo.png" />
 
   <style>
@@ -36,8 +36,12 @@
       display: block;
       margin: 0 auto;
     }
-    /* UI PANELS */
-    #menuOverlay, #leaderboardOverlay, #authOverlay, #paymentOverlay, #p2pOverlay {
+    /* UI PANELS (Overlays) */
+    #menuOverlay,
+    #leaderboardOverlay,
+    #authOverlay,
+    #paymentOverlay,
+    #p2pOverlay {
       position: absolute;
       top: 0;
       left: 0;
@@ -100,7 +104,7 @@
   <!-- MAIN MENU OVERLAY -->
   <div id="menuOverlay" style="display:flex;">
     <div class="overlayContent">
-      <!-- Display the local Pi logo at the top. Adjust size/style as you wish. -->
+      <!-- Local Pi logo. Adjust size/style and path as necessary. -->
       <img src="./images/pi-logo.png" alt="Pi Logo" style="width: 100px; height: auto; margin-bottom: 10px;" />
       <h2>PiSpace Shooter</h2>
       <p>Welcome to PiSpace Shooter! Blast asteroids, earn points, and climb the leaderboard.</p>
@@ -113,7 +117,7 @@
   </div>
 
   <!-- SIGNUP/AUTH OVERLAY -->
-  <div id="authOverlay" style="display:none;">
+  <div id="authOverlay">
     <div class="overlayContent">
       <h2>Sign Up / Sign In</h2>
       <p>Authenticate with Pi Wallet:</p>
@@ -139,7 +143,7 @@
           </tr>
         </thead>
         <tbody>
-          <!-- Dynamic content -->
+          <!-- Dynamic content inserted by JavaScript -->
         </tbody>
       </table>
       <button onclick="toggleOverlay('leaderboardOverlay', false)">Close</button>
@@ -194,11 +198,11 @@
   </div>
 </div>
 
-<!-- Firebase and Game Script References -->
-<script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-firestore-compat.js"></script>
+<!-- Optional: If using SweetAlert2 non-module in the parent document, keep the following.
+     Otherwise, remove if you're importing it directly in app.js as an ES module. -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<script src="app.js"></script>
+
+<!-- Link to your ES module app.js (Firebase v9 code). -->
+<script type="module" src="app.js"></script>
 </body>
 </html>
