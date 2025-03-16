@@ -1,559 +1,208 @@
-/******************************************************
- *   PiSpace Shooter - Final app.js (Firebase v9 Modular)
- *   This code uses placeholders for Pi Wallet authentication,
- *   which must be replaced with real Pi Network SDK methods.
- ******************************************************/
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PiSpace Shooter</title>
 
-// ------------------------------------
-// 1. Import necessary Firebase v9 modules
-// ------------------------------------
-import { 
-  initializeApp 
-} from "firebase/app";
-import { 
-  getAnalytics 
-} from "firebase/analytics";
-import {
-  getAuth,
-  signInAnonymously,
-  onAuthStateChanged,
-  signOut
-} from "firebase/auth";
-import {
-  getFirestore,
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-  collection,
-  addDoc,
-  query,
-  orderBy,
-  limit,
-  getDocs
-} from "firebase/firestore";
+  <!-- Use your local Pi logo file. Ensure that pi-logo.png exists in ./images/ -->
+  <link rel="icon" href="./images/pi-logo.png" />
 
-// If you're using SweetAlert2 as an ES module:
-import Swal from "sweetalert2";
-
-// ------------------------------------
-// 2. Firebase Configuration
-//    Replace with your actual config if different
-// ------------------------------------
-const firebaseConfig = {
-  apiKey: "AIzaSyAZKtnnm3hc6ViJLSLhV7PK8calqELiL_4",
-  authDomain: "magic-image-ai-15a0d.firebaseapp.com",
-  databaseURL: "https://magic-image-ai-15a0d-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "magic-image-ai-15a0d",
-  storageBucket: "magic-image-ai-15a0d.firebasestorage.app",
-  messagingSenderId: "864109068756",
-  appId: "1:864109068756:web:2d680b0c0d5b791f32d641",
-  measurementId: "G-M6EM5CCVQ2"
-};
-
-// ------------------------------------
-// 3. Initialize Firebase
-// ------------------------------------
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app); // optional
-const auth = getAuth(app);
-const db = getFirestore(app);
-
-/**
- * Global Game State
- */
-let currentUser = null;
-let currentScore = 0;
-let freeGamesCount = 3; // New users get first 3 games free
-let userCoins = 0;
-let userPiAddress = "";
-let userGamesUsed = 0;
-
-/**
- * Canvas Setup
- */
-const canvas = document.getElementById("gameCanvas");
-const ctx = canvas.getContext("2d");
-let gameActive = false;
-let asteroids = [];
-let bullets = [];
-let player = {
-  x: canvas.width / 2,
-  y: canvas.height - 50,
-  radius: 20
-};
-
-/**
- * Helper: Toggle Overlay
- */
-function toggleOverlay(id, show) {
-  const overlay = document.getElementById(id);
-  overlay.style.display = show ? "flex" : "none";
-}
-
-/**
- * Helper: Show Message using SweetAlert2
- */
-function showMessage(title, text, icon = "info") {
-  Swal.fire({
-    icon: icon,
-    title: title,
-    text: text
-  });
-}
-
-/**
- * Pi Wallet Login - Placeholder
- * Replace with real Pi Network authentication
- */
-export function piWalletLogin() {
-  // Simulate Pi Wallet login via Firebase anonymous sign-in
-  signInAnonymously(auth)
-    .then(() => {
-      toggleOverlay("authOverlay", false);
-      showMessage("Pi Wallet Login", "Simulated login successful.", "success");
-    })
-    .catch((error) => {
-      showMessage("Error", error.message, "error");
-    });
-}
-
-/**
- * Save or Update Pi Address
- */
-export function savePiAddress() {
-  const newPiAddress = document.getElementById("piAddressInput").value;
-  if (!currentUser) {
-    showMessage("Error", "You must login first", "error");
-    return;
-  }
-  if (newPiAddress.trim() === "") {
-    showMessage("Error", "Pi address is required", "error");
-    return;
-  }
-  const userRef = doc(db, "users", currentUser.uid);
-  updateDoc(userRef, { piAddress: newPiAddress })
-    .then(() => {
-      userPiAddress = newPiAddress;
-      showMessage("Success", "Pi address updated", "success");
-    })
-    .catch((err) => {
-      showMessage("Error", err.message, "error");
-    });
-}
-
-/**
- * Firebase Auth State Listener
- */
-onAuthStateChanged(auth, async (user) => {
-  if (user) {
-    currentUser = user;
-    const userRef = doc(db, "users", user.uid);
-    const docSnap = await getDoc(userRef);
-
-    if (!docSnap.exists()) {
-      // Create new user in Firestore
-      await setDoc(userRef, {
-        username: "user" + Date.now(),
-        piAddress: "",
-        coins: 0,
-        totalScore: 0,
-        highScore: 0,
-        freeGames: 3,
-        gameHistory: []
-      });
-      showMessage("Welcome!", "New user profile created.", "success");
-      userCoins = 0;
-      freeGamesCount = 3;
-    } else {
-      const data = docSnap.data();
-      userCoins = data.coins || 0;
-      userPiAddress = data.piAddress || "";
-      freeGamesCount = data.freeGames || 3;
+  <style>
+    /* BASIC RESET */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
     }
-    toggleOverlay("menuOverlay", true);
-  } else {
-    toggleOverlay("authOverlay", true);
-  }
-});
-
-/**
- * Logout
- */
-export function logout() {
-  signOut(auth)
-    .then(() => {
-      currentUser = null;
-      showMessage("Logged Out", "You have been logged out.", "info");
-      toggleOverlay("menuOverlay", false);
-      toggleOverlay("authOverlay", true);
-    })
-    .catch((error) => {
-      showMessage("Error", error.message, "error");
-    });
-}
-
-/**
- * Start the Game
- */
-export function startGame() {
-  if (freeGamesCount <= 0) {
-    showMessage("No Free Games Left", "Purchase more credits or coins to play!", "error");
-    return;
-  }
-
-  freeGamesCount--;
-  const userRef = doc(db, "users", currentUser.uid);
-  updateDoc(userRef, { freeGames: freeGamesCount });
-
-  resetGame();
-  gameActive = true;
-  toggleOverlay("menuOverlay", false);
-  gameLoop();
-}
-
-/**
- * Reset Game Variables
- */
-function resetGame() {
-  currentScore = 0;
-  player.x = canvas.width / 2;
-  player.y = canvas.height - 50;
-  asteroids = [];
-  bullets = [];
-}
-
-/**
- * Main Game Loop
- */
-function gameLoop() {
-  if (!gameActive) return;
-
-  // Clear the canvas
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  // Draw player
-  drawPlayer();
-
-  // Update bullets
-  updateBullets();
-
-  // Spawn and update asteroids
-  spawnAsteroids();
-  updateAsteroids();
-
-  // Check collisions
-  checkCollisions();
-
-  // Display score
-  ctx.fillStyle = "#fff";
-  ctx.font = "20px Arial";
-  ctx.fillText("Score: " + currentScore, 10, 30);
-
-  requestAnimationFrame(gameLoop);
-}
-
-/**
- * Draw Player
- */
-function drawPlayer() {
-  ctx.beginPath();
-  ctx.arc(player.x, player.y, player.radius, 0, 2 * Math.PI);
-  ctx.fillStyle = "#00eaff";
-  ctx.fill();
-  ctx.closePath();
-}
-
-/**
- * Handle Key Down - Move & Shoot
- */
-document.addEventListener("keydown", (e) => {
-  if (!gameActive) return;
-  if (e.key === "ArrowLeft" && player.x > player.radius) {
-    player.x -= 10;
-  } else if (e.key === "ArrowRight" && player.x < canvas.width - player.radius) {
-    player.x += 10;
-  } else if (e.key === "ArrowUp" || e.key === " ") {
-    bullets.push({ x: player.x, y: player.y - player.radius });
-  }
-});
-
-/**
- * Update Bullets
- */
-function updateBullets() {
-  for (let i = 0; i < bullets.length; i++) {
-    bullets[i].y -= 5;
-    ctx.beginPath();
-    ctx.arc(bullets[i].x, bullets[i].y, 5, 0, 2 * Math.PI);
-    ctx.fillStyle = "#ffae00";
-    ctx.fill();
-    ctx.closePath();
-
-    if (bullets[i].y < -10) {
-      bullets.splice(i, 1);
-      i--;
+    body, html {
+      width: 100%;
+      height: 100%;
+      background: #0f0f1b; /* Dark background for a space look */
+      font-family: Arial, sans-serif;
+      color: #ffffff;
+      overflow: hidden;
     }
-  }
-}
-
-/**
- * Spawn Asteroids Periodically
- */
-let asteroidSpawnCounter = 0;
-function spawnAsteroids() {
-  asteroidSpawnCounter++;
-  if (asteroidSpawnCounter > 50) {
-    const radius = Math.random() * 20 + 10;
-    asteroids.push({
-      x: Math.random() * (canvas.width - radius * 2) + radius,
-      y: -radius,
-      radius: radius,
-      speed: Math.random() * 2 + 1
-    });
-    asteroidSpawnCounter = 0;
-  }
-}
-
-/**
- * Update Asteroids
- */
-function updateAsteroids() {
-  for (let i = 0; i < asteroids.length; i++) {
-    asteroids[i].y += asteroids[i].speed;
-    ctx.beginPath();
-    ctx.arc(asteroids[i].x, asteroids[i].y, asteroids[i].radius, 0, 2 * Math.PI);
-    ctx.fillStyle = "#ff2d2d";
-    ctx.fill();
-    ctx.closePath();
-
-    if (asteroids[i].y > canvas.height + asteroids[i].radius) {
-      asteroids.splice(i, 1);
-      i--;
-      continue;
+    /* RESPONSIVE CANVAS WRAPPER */
+    #gameContainer {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background: #0f0f1b;
     }
-  }
-}
-
-/**
- * Check Collisions
- */
-function checkCollisions() {
-  // Bullets vs Asteroids
-  for (let i = 0; i < asteroids.length; i++) {
-    for (let j = 0; j < bullets.length; j++) {
-      const dx = asteroids[i].x - bullets[j].x;
-      const dy = asteroids[i].y - bullets[j].y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < asteroids[i].radius + 5) {
-        currentScore += 10;
-        asteroids.splice(i, 1);
-        bullets.splice(j, 1);
-        i--;
-        break;
+    /* RESPONSIVE CANVAS STYLING */
+    #gameCanvas {
+      background: #0f0f1b;
+      display: block;
+      margin: 0 auto;
+    }
+    /* UI PANELS (Overlays) */
+    #menuOverlay,
+    #leaderboardOverlay,
+    #authOverlay,
+    #paymentOverlay,
+    #p2pOverlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(15,15,27,0.8);
+      display: none; /* Overlays start hidden */
+      justify-content: center;
+      align-items: center;
+      z-index: 5;
+      text-align: center;
+    }
+    .overlayContent {
+      background: #252540;
+      padding: 20px;
+      border-radius: 8px;
+      width: 90%;
+      max-width: 400px;
+    }
+    .overlayContent h2 {
+      margin-bottom: 10px;
+    }
+    .overlayContent input, select {
+      width: 100%;
+      padding: 10px;
+      margin: 5px 0;
+    }
+    .overlayContent button {
+      padding: 10px 20px;
+      margin: 5px;
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+      background: #673ab7;
+      color: #fff;
+    }
+    /* LEADERBOARD TABLE */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    table th, table td {
+      border: 1px solid #444;
+      padding: 8px;
+      text-align: center;
+    }
+    /* RESPONSIVE FOR SMALL SCREENS */
+    @media only screen and (max-width: 600px) {
+      .overlayContent {
+        max-width: 300px;
       }
     }
-  }
+  </style>
+</head>
+<body>
+<div id="gameContainer">
+  <canvas id="gameCanvas" width="480" height="600"></canvas>
 
-  // Player vs Asteroid
-  for (let i = 0; i < asteroids.length; i++) {
-    const dx = asteroids[i].x - player.x;
-    const dy = asteroids[i].y - player.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < asteroids[i].radius + player.radius) {
-      // Game over
-      gameActive = false;
-      endGame();
-      return;
-    }
-  }
-}
+  <!-- MAIN MENU OVERLAY -->
+  <div id="menuOverlay" style="display:flex;">
+    <div class="overlayContent">
+      <!-- Local Pi logo. Adjust size/style and path as necessary. -->
+      <img src="./images/pi-logo.png" alt="Pi Logo" style="width: 100px; height: auto; margin-bottom: 10px;" />
+      <h2>PiSpace Shooter</h2>
+      <p>Welcome to PiSpace Shooter! Blast asteroids, earn points, and climb the leaderboard.</p>
+      <button onclick="startGame()">Play Free Game</button>
+      <button onclick="toggleOverlay('leaderboardOverlay', true)">Leaderboard</button>
+      <button onclick="toggleOverlay('paymentOverlay', true)">Buy Coins / Top Up</button>
+      <button onclick="toggleOverlay('p2pOverlay', true)">P2P Battles</button>
+      <button onclick="logout()">Logout</button>
+    </div>
+  </div>
 
-/**
- * End Game
- */
-function endGame() {
-  showMessage("Game Over", `Your final score: ${currentScore}`, "info");
-  if (currentUser) {
-    const userRef = doc(db, "users", currentUser.uid);
-    getDoc(userRef).then((docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        // Update high score if needed
-        if (currentScore > (data.highScore || 0)) {
-          updateDoc(userRef, { highScore: currentScore });
-        }
-        // Add to total score
-        updateDoc(userRef, {
-          totalScore: (data.totalScore || 0) + currentScore
-        });
-      }
-    });
-  }
-  toggleOverlay("menuOverlay", true);
-}
+  <!-- SIGNUP/AUTH OVERLAY -->
+  <div id="authOverlay">
+    <div class="overlayContent">
+      <h2>Sign Up / Sign In</h2>
+      <p>Authenticate with Pi Wallet:</p>
+      <button onclick="piWalletLogin()">Login with Pi Wallet</button>
+      <hr />
+      <p>Update Pi Address (if needed):</p>
+      <input type="text" id="piAddressInput" placeholder="Enter or update Pi address" />
+      <button onclick="savePiAddress()">Save Pi Address</button>
+      <button onclick="toggleOverlay('authOverlay', false)">Close</button>
+    </div>
+  </div>
 
-/**
- * Load Leaderboard (Top 10)
- */
-async function loadLeaderboard() {
-  const tableBody = document.querySelector("#leaderboardTable tbody");
-  tableBody.innerHTML = "";
+  <!-- LEADERBOARD OVERLAY -->
+  <div id="leaderboardOverlay">
+    <div class="overlayContent">
+      <h2>Top 10 Leaderboard</h2>
+      <table id="leaderboardTable">
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>User</th>
+            <th>Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Dynamic content inserted by JavaScript -->
+        </tbody>
+      </table>
+      <button onclick="toggleOverlay('leaderboardOverlay', false)">Close</button>
+    </div>
+  </div>
 
-  const q = query(
-    collection(db, "users"),
-    orderBy("highScore", "desc"),
-    limit(10)
-  );
-  try {
-    const snapshot = await getDocs(q);
-    let rank = 1;
-    snapshot.forEach((docItem) => {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${rank}</td>
-        <td>${docItem.data().username}</td>
-        <td>${docItem.data().highScore || 0}</td>
-      `;
-      tableBody.appendChild(tr);
-      rank++;
-    });
-    toggleOverlay("leaderboardOverlay", true);
-  } catch (err) {
-    showMessage("Error", err.message, "error");
-  }
-}
+  <!-- PAYMENT OVERLAY -->
+  <div id="paymentOverlay">
+    <div class="overlayContent">
+      <h2>Buy Game Coins / Top Up</h2>
+      <p>1 Pi = 10 Coins. Select your top-up option:</p>
+      <select id="topUpSelect">
+        <option value="1">1 Pi → 10 Coins</option>
+        <option value="10">10 Pi → 100 Coins</option>
+        <option value="20">20 Pi → 200 Coins</option>
+        <option value="50">50 Pi → 500 Coins</option>
+        <option value="custom">Custom (1 Pi = 10 Coins)</option>
+      </select>
+      <input 
+        type="number" 
+        id="customPiAmount" 
+        placeholder="If custom, enter number of Pi" 
+        style="display:none;" 
+      />
+      <button onclick="buyCoins()">Buy</button>
+      <hr />
+      <h2>Withdraw Coins</h2>
+      <p>Minimum withdrawal is 100 coins.</p>
+      <input type="number" id="withdrawCoins" placeholder="Enter number of coins to withdraw" />
+      <button onclick="withdrawCoinRequest()">Withdraw</button>
+      <hr />
+      <button onclick="toggleOverlay('paymentOverlay', false)">Close</button>
+    </div>
+  </div>
 
-/**
- * Link to Leaderboard Overlay
- */
-document.getElementById("leaderboardOverlay").addEventListener("click", (e) => {
-  if (e.target.id === "leaderboardOverlay") {
-    toggleOverlay("leaderboardOverlay", false);
-  }
-});
+  <!-- P2P OVERLAY -->
+  <div id="p2pOverlay">
+    <div class="overlayContent">
+      <h2>P2P / Multiplayer Matches</h2>
+      <p>Select a 2-player or 4-player match with entry fee and potential winnings.</p>
+      <h3>2-Player:</h3>
+      <button onclick="createP2PMatch(10)">10 coin fee → win 15 coins</button>
+      <button onclick="createP2PMatch(20)">20 coin fee → win 33 coins</button>
+      <button onclick="createP2PMatch(100)">100 coin fee → win 180 coins</button>
+      <h3>4-Player:</h3>
+      <button onclick="create4PlayerMatch(10)">Fee 10 coin → win 30 coins</button>
+      <button onclick="create4PlayerMatch(100)">Fee 100 coin → win 350 coins</button>
+      <hr />
+      <p>Your Match History (2-Player and 4-Player) will appear in your profile soon!</p>
+      <button onclick="toggleOverlay('p2pOverlay', false)">Close</button>
+    </div>
+  </div>
+</div>
 
-export function loadLeaderboardOverlay() {
-  loadLeaderboard();
-}
+<!-- Optional: If using SweetAlert2 non-module in the parent document, keep the following.
+     Otherwise, remove if you're importing it directly in app.js as an ES module. -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
-/**
- * Buy Coins
- * 1 Pi = 10 coins
- */
-export function buyCoins() {
-  const selection = document.getElementById("topUpSelect").value;
-  let piAmount = 0;
-  if (selection === "custom") {
-    piAmount = Number(document.getElementById("customPiAmount").value) || 0;
-  } else {
-    piAmount = Number(selection);
-  }
-  if (piAmount <= 0) {
-    showMessage("Error", "Invalid Pi amount", "error");
-    return;
-  }
-  // Placeholder: Replace with Pi payment flow
-  const coinsToCredit = piAmount * 10;
-  userCoins += coinsToCredit;
-  saveCoinBalance();
-  showMessage("Purchase Successful", `You received ${coinsToCredit} coins!`, "success");
-}
-
-/**
- * Update custom top-up display
- */
-document.getElementById("topUpSelect").addEventListener("change", (e) => {
-  if (e.target.value === "custom") {
-    document.getElementById("customPiAmount").style.display = "block";
-  } else {
-    document.getElementById("customPiAmount").style.display = "none";
-  }
-});
-
-/**
- * Save Coin Balance
- */
-function saveCoinBalance() {
-  if (!currentUser) return;
-  const userRef = doc(db, "users", currentUser.uid);
-  updateDoc(userRef, { coins: userCoins });
-}
-
-/**
- * Withdraw Coin Request
- */
-export function withdrawCoinRequest() {
-  const amount = Number(document.getElementById("withdrawCoins").value);
-  if (amount < 100) {
-    showMessage("Minimum withdrawal is 100 coins", "Enter a valid amount", "error");
-    return;
-  }
-  if (amount > userCoins) {
-    showMessage("Insufficient Coins", "You don’t have enough coins", "error");
-    return;
-  }
-  // Placeholder: Implement actual Pi transfer to user's Pi address
-  userCoins -= amount;
-  saveCoinBalance();
-  showMessage("Withdrawal Requested", `Successfully withdrew ${amount} coins.`, "success");
-}
-
-/**
- * Create 2-Player Match
- * fee: 10 → 15 coins, 20 → 33 coins, 100 → 180 coins
- */
-export function createP2PMatch(fee) {
-  if (userCoins < fee) {
-    showMessage("Not Enough Coins", `You need at least ${fee} coins to join.`, "error");
-    return;
-  }
-  userCoins -= fee;
-  saveCoinBalance();
-
-  // Create match doc in Firestore
-  const matchRef = collection(db, "matches");
-  const newMatch = {
-    players: [currentUser.uid],
-    fee: fee,
-    status: "pending",
-    results: {}
-  };
-  addDoc(matchRef, newMatch)
-    .then(() => {
-      showMessage(
-        "Match Created",
-        "2-player match created. Another user will join indirectly!",
-        "success"
-      );
-    });
-}
-
-/**
- * Create 4-Player Match
- * fee: 10 → 30 coins, 100 → 350 coins
- */
-export function create4PlayerMatch(fee) {
-  if (userCoins < fee) {
-    showMessage("Not Enough Coins", `You need at least ${fee} coins to join.`, "error");
-    return;
-  }
-  userCoins -= fee;
-  saveCoinBalance();
-
-  const matchRef = collection(db, "matches");
-  const newMatch = {
-    players: [currentUser.uid],
-    fee: fee,
-    status: "pending",
-    results: {}
-  };
-  addDoc(matchRef, newMatch)
-    .then(() => {
-      showMessage(
-        "Match Created",
-        "4-player match created. More players will join indirectly!",
-        "success"
-      );
-    });
-}
+<!-- Link to your ES module app.js (Firebase v9 code). -->
+<script type="module" src="app.js"></script>
+</body>
+</html>
