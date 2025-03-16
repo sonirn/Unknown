@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PiSpace Shooter</title>
+
+  <!-- Use your local Pi logo file. Make sure the path to pi-logo.png is correct. -->
+  <link rel="icon" href="./images/pi-logo.png" />
+
+  <style>
+    /* BASIC RESET */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body, html {
+      width: 100%;
+      height: 100%;
+      background: #0f0f1b; /* Dark background for a space look */
+      font-family: Arial, sans-serif;
+      color: #ffffff;
+      overflow: hidden;
+    }
+    /* RESPONSIVE CANVAS WRAPPER */
+    #gameContainer {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background: #0f0f1b;
+    }
+    /* RESPONSIVE CANVAS STYLING */
+    #gameCanvas {
+      background: #0f0f1b;
+      display: block;
+      margin: 0 auto;
+    }
+    /* UI PANELS */
+    #menuOverlay, #leaderboardOverlay, #authOverlay, #paymentOverlay, #p2pOverlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(15,15,27,0.8);
+      display: none; /* Overlays start hidden */
+      justify-content: center;
+      align-items: center;
+      z-index: 5;
+      text-align: center;
+    }
+    .overlayContent {
+      background: #252540;
+      padding: 20px;
+      border-radius: 8px;
+      width: 90%;
+      max-width: 400px;
+    }
+    .overlayContent h2 {
+      margin-bottom: 10px;
+    }
+    .overlayContent input, select {
+      width: 100%;
+      padding: 10px;
+      margin: 5px 0;
+    }
+    .overlayContent button {
+      padding: 10px 20px;
+      margin: 5px;
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+      background: #673ab7;
+      color: #fff;
+    }
+    /* LEADERBOARD TABLE */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    table th, table td {
+      border: 1px solid #444;
+      padding: 8px;
+      text-align: center;
+    }
+    /* RESPONSIVE FOR SMALL SCREENS */
+    @media only screen and (max-width: 600px) {
+      .overlayContent {
+        max-width: 300px;
+      }
+    }
+  </style>
+</head>
+<body>
+<div id="gameContainer">
+  <canvas id="gameCanvas" width="480" height="600"></canvas>
+
+  <!-- MAIN MENU OVERLAY -->
+  <div id="menuOverlay" style="display:flex;">
+    <div class="overlayContent">
+      <!-- Display the local Pi logo at the top. Adjust size/style as you wish. -->
+      <img src="./images/pi-logo.png" alt="Pi Logo" style="width: 100px; height: auto; margin-bottom: 10px;" />
+      <h2>PiSpace Shooter</h2>
+      <p>Welcome to PiSpace Shooter! Blast asteroids, earn points, and climb the leaderboard.</p>
+      <button onclick="startGame()">Play Free Game</button>
+      <button onclick="toggleOverlay('leaderboardOverlay', true)">Leaderboard</button>
+      <button onclick="toggleOverlay('paymentOverlay', true)">Buy Coins / Top Up</button>
+      <button onclick="toggleOverlay('p2pOverlay', true)">P2P Battles</button>
+      <button onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <!-- SIGNUP/AUTH OVERLAY -->
+  <div id="authOverlay" style="display:none;">
+    <div class="overlayContent">
+      <h2>Sign Up / Sign In</h2>
+      <p>Authenticate with Pi Wallet:</p>
+      <button onclick="piWalletLogin()">Login with Pi Wallet</button>
+      <hr />
+      <p>Update Pi Address (if needed):</p>
+      <input type="text" id="piAddressInput" placeholder="Enter or update Pi address" />
+      <button onclick="savePiAddress()">Save Pi Address</button>
+      <button onclick="toggleOverlay('authOverlay', false)">Close</button>
+    </div>
+  </div>
+
+  <!-- LEADERBOARD OVERLAY -->
+  <div id="leaderboardOverlay">
+    <div class="overlayContent">
+      <h2>Top 10 Leaderboard</h2>
+      <table id="leaderboardTable">
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>User</th>
+            <th>Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Dynamic content -->
+        </tbody>
+      </table>
+      <button onclick="toggleOverlay('leaderboardOverlay', false)">Close</button>
+    </div>
+  </div>
+
+  <!-- PAYMENT OVERLAY -->
+  <div id="paymentOverlay">
+    <div class="overlayContent">
+      <h2>Buy Game Coins / Top Up</h2>
+      <p>1 Pi = 10 Coins. Select your top-up option:</p>
+      <select id="topUpSelect">
+        <option value="1">1 Pi → 10 Coins</option>
+        <option value="10">10 Pi → 100 Coins</option>
+        <option value="20">20 Pi → 200 Coins</option>
+        <option value="50">50 Pi → 500 Coins</option>
+        <option value="custom">Custom (1 Pi = 10 Coins)</option>
+      </select>
+      <input 
+        type="number" 
+        id="customPiAmount" 
+        placeholder="If custom, enter number of Pi" 
+        style="display:none;" 
+      />
+      <button onclick="buyCoins()">Buy</button>
+      <hr />
+      <h2>Withdraw Coins</h2>
+      <p>Minimum withdrawal is 100 coins.</p>
+      <input type="number" id="withdrawCoins" placeholder="Enter number of coins to withdraw" />
+      <button onclick="withdrawCoinRequest()">Withdraw</button>
+      <hr />
+      <button onclick="toggleOverlay('paymentOverlay', false)">Close</button>
+    </div>
+  </div>
+
+  <!-- P2P OVERLAY -->
+  <div id="p2pOverlay">
+    <div class="overlayContent">
+      <h2>P2P / Multiplayer Matches</h2>
+      <p>Select a 2-player or 4-player match with entry fee and potential winnings.</p>
+      <h3>2-Player:</h3>
+      <button onclick="createP2PMatch(10)">10 coin fee → win 15 coins</button>
+      <button onclick="createP2PMatch(20)">20 coin fee → win 33 coins</button>
+      <button onclick="createP2PMatch(100)">100 coin fee → win 180 coins</button>
+      <h3>4-Player:</h3>
+      <button onclick="create4PlayerMatch(10)">Fee 10 coin → win 30 coins</button>
+      <button onclick="create4PlayerMatch(100)">Fee 100 coin → win 350 coins</button>
+      <hr />
+      <p>Your Match History (2-Player and 4-Player) will appear in your profile soon!</p>
+      <button onclick="toggleOverlay('p2pOverlay', false)">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase and Game Script References -->
+<script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.17.2/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="app.js"></script>
+</body>
+</html>
